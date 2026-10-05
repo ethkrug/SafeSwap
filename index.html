@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SafeSwap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+:root {
+  --bg: oklch(97.5% 0.006 110); --panel: oklch(99.5% 0.003 110); --sunk: oklch(95% 0.008 110);
+  --ink: oklch(24% 0.02 150); --muted: oklch(50% 0.015 150); --line: oklch(90% 0.01 110);
+  --accent: oklch(46% 0.09 155); --accent-soft: oklch(93% 0.035 155);
+  --red: oklch(50% 0.16 28); --red-soft: oklch(94.5% 0.03 28);
+  --amber: oklch(52% 0.12 70); --amber-soft: oklch(95% 0.04 80);
+  --green: oklch(48% 0.11 155); --green-soft: oklch(94.5% 0.035 155);
+  --gray: oklch(50% 0.01 150); --gray-soft: oklch(94% 0.005 150);
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(18% 0.01 150); --panel: oklch(21.5% 0.012 150); --sunk: oklch(16% 0.01 150);
+    --ink: oklch(93% 0.01 150); --muted: oklch(70% 0.015 150); --line: oklch(30% 0.012 150);
+    --accent: oklch(78% 0.1 155); --accent-soft: oklch(30% 0.04 155);
+    --red: oklch(76% 0.12 28); --red-soft: oklch(29% 0.05 28);
+    --amber: oklch(80% 0.11 80); --amber-soft: oklch(30% 0.05 80);
+    --green: oklch(78% 0.1 155); --green-soft: oklch(29% 0.04 155);
+    --gray: oklch(72% 0.01 150); --gray-soft: oklch(28% 0.008 150);
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Public Sans", system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.55; height: 100vh; overflow: hidden; }
+a { color: var(--accent); } a:hover { text-decoration-thickness: 2px; }
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+button:disabled { opacity: .45; cursor: default; }
+.app { display: grid; grid-template-columns: 296px minmax(0, 1fr); height: 100vh; }
+
+/* Sidebar */
+aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.side-scroll { flex: 1; overflow-y: auto; padding: 22px 20px; display: flex; flex-direction: column; gap: 26px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--panel); display: grid; place-items: center; font-weight: 700; font-size: 15px; }
+.brand h1 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.tagline { color: var(--muted); font-size: 13px; margin-top: 8px; text-wrap: pretty; }
+.label { font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.block-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.link-btn { font-size: 12.5px; font-weight: 600; color: var(--accent); }
+.profile-card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
+.profile-empty { color: var(--muted); font-size: 13px; text-wrap: pretty; }
+.pgroup { display: grid; gap: 6px; }
+.pgroup .k { font-size: 12px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; padding: 3px 10px; border-radius: 999px; display: inline-flex; align-items: baseline; gap: 6px; font-weight: 500; }
+.chip small { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.chip.severe { background: var(--red-soft); color: var(--red); }
+.chip.moderate { background: var(--amber-soft); color: var(--amber); }
+.chip.diet { background: var(--green-soft); color: var(--green); }
+.chip.avoid { background: var(--gray-soft); color: var(--gray); }
+
+/* Quick setup: tap a chip to cycle off -> severe -> moderate */
+.setup { display: none; gap: 12px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.setup.show { display: grid; }
+.setup p { font-size: 12px; color: var(--muted); }
+.pick { font-size: 12.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); display: inline-flex; gap: 6px; align-items: baseline; }
+.pick small { font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+.pick[data-state="severe"] { background: var(--red-soft); color: var(--red); border-color: transparent; }
+.pick[data-state="moderate"] { background: var(--amber-soft); color: var(--amber); border-color: transparent; }
+.pick[data-state="on"] { background: var(--green-soft); color: var(--green); border-color: transparent; }
+.primary { background: var(--accent); color: var(--panel); font-weight: 600; font-size: 13px; border-radius: 9px; padding: 9px 14px; }
+
+.steps { list-style: none; display: grid; gap: 12px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 13px; color: var(--muted); text-wrap: pretty; counter-increment: s; }
+.steps li::before { content: counter(s); font-family: var(--mono); font-size: 11px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--ink); margin-top: 1px; }
+.steps b { color: var(--ink); font-weight: 600; display: block; }
+.side-foot { border-top: 1px solid var(--line); padding: 14px 20px; display: grid; gap: 10px; font-size: 12px; color: var(--muted); }
+.side-foot .ghost { justify-self: start; font-size: 12.5px; font-weight: 600; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
+.side-foot .ghost:hover { border-color: var(--muted); }
+
+/* Main */
+main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+#messages { flex: 1; overflow-y: auto; padding: 40px 28px 16px; }
+.thread { max-width: 740px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+.welcome h2 { font-size: 34px; line-height: 1.12; letter-spacing: -.025em; font-weight: 700; max-width: 520px; text-wrap: balance; }
+.welcome > p { color: var(--muted); margin-top: 12px; max-width: 560px; text-wrap: pretty; }
+.examples { margin-top: 30px; border-top: 1px solid var(--line); }
+.example { width: 100%; display: grid; grid-template-columns: 92px minmax(0, 1fr) 20px; gap: 14px; align-items: baseline; text-align: left; padding: 13px 4px; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+.example span { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--accent); }
+.example i { font-style: normal; color: var(--muted); opacity: 0; transition: opacity .15s, transform .15s; }
+.example:hover { background: var(--panel); }
+.example:hover i { opacity: 1; transform: translateX(3px); }
+
+.msg.user { align-self: flex-end; max-width: 78%; background: var(--accent-soft); color: var(--ink); padding: 10px 15px; border-radius: 14px 14px 4px 14px; white-space: pre-wrap; word-break: break-word; }
+.msg.assistant { display: grid; gap: 12px; }
+.answer { word-break: break-word; }
+.answer > * + * { margin-top: .7em; }
+.answer > p:first-child { font-size: 17px; font-weight: 600; letter-spacing: -.01em; line-height: 1.4; }
+.answer h1, .answer h2, .answer h3, .answer h4 { font-size: 15px; font-weight: 700; margin-top: 1.3em; }
+.answer ul, .answer ol { padding-left: 20px; }
+.answer li + li { margin-top: .25em; }
+.answer hr { border: none; border-top: 1px solid var(--line); }
+.answer blockquote { background: var(--amber-soft); color: var(--ink); padding: 10px 14px; border-radius: 10px; font-size: 14px; }
+.answer code { font-family: var(--mono); font-size: 13px; }
+.answer table { border-collapse: collapse; font-size: 14px; }
+.answer td, .answer th { border-bottom: 1px solid var(--line); padding: 6px 10px 6px 0; text-align: left; }
+.answer.error { background: var(--red-soft); color: var(--red); padding: 12px 16px; border-radius: 10px; }
+.thinking { color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.thinking .wait-note { flex-basis: 100%; font-size: 12.5px; }
+.dots span { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: var(--accent); animation: bob 1s infinite ease-in-out; }
+.dots span:nth-child(2) { animation-delay: .15s; } .dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes bob { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+/* Tool trace: a compact checklist under the answer */
+.trace { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.trace > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; }
+.trace > summary::-webkit-details-marker { display: none; }
+.trace > summary .chev { color: var(--muted); transition: transform .15s; font-size: 11px; }
+.trace[open] > summary .chev { transform: rotate(90deg); }
+.trace > summary .what { font-weight: 600; }
+.trace > summary .src { color: var(--muted); }
+.trace-steps { border-top: 1px solid var(--line); }
+.step + .step { border-top: 1px solid var(--line); }
+.step-head { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; cursor: pointer; font-size: 13.5px; }
+.step-head:hover { background: var(--sunk); }
+.step-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray); }
+.step-head .dot.red { background: var(--red); } .step-head .dot.amber { background: var(--amber); } .step-head .dot.green { background: var(--green); }
+.step-head .main { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; min-width: 0; }
+.step-head .title { font-weight: 600; }
+.step-head .tool-name { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.step-body { display: none; padding: 4px 14px 14px 36px; font-size: 13px; }
+.step.open .step-body { display: block; }
+.pill { font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.red { background: var(--red-soft); color: var(--red); }
+.pill.amber { background: var(--amber-soft); color: var(--amber); }
+.pill.green { background: var(--green-soft); color: var(--green); }
+.pill.gray { background: var(--gray-soft); color: var(--gray); }
+.pill.src { background: transparent; color: var(--muted); font-family: var(--mono); font-weight: 400; font-size: 11px; padding: 0; }
+.rows { display: grid; }
+.row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: none; }
+.row .name { font-weight: 500; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.row .detail { color: var(--muted); }
+.row .detail b { color: var(--ink); font-weight: 500; }
+.sub { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 14px 0 4px; }
+.sub:first-child { margin-top: 4px; }
+.notes { color: var(--muted); padding-left: 16px; display: grid; gap: 3px; }
+.ingredients-text { font-size: 12.5px; color: var(--muted); background: var(--sunk); border-radius: 8px; padding: 8px 10px; }
+.raw-toggle { margin-top: 12px; font-size: 12px; color: var(--accent); font-weight: 500; }
+pre.raw { display: none; margin-top: 8px; font-family: var(--mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; background: var(--sunk); border-radius: 8px; padding: 8px 10px; max-height: 320px; overflow: auto; }
+pre.raw.show { display: block; }
+
+/* Composer */
+.composer { padding: 10px 28px 18px; }
+.composer-inner { max-width: 740px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 12px 10px 16px; box-shadow: 0 1px 2px oklch(24% 0.02 150 / .05), 0 8px 24px oklch(24% 0.02 150 / .05); }
+.composer-inner:focus-within { border-color: var(--accent); }
+textarea { width: 100%; border: none; outline: none; resize: none; font: inherit; color: var(--ink); background: transparent; max-height: 200px; line-height: 1.45; display: block; }
+textarea::placeholder { color: var(--muted); }
+.composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.hint { font-size: 12px; color: var(--muted); }
+#send { background: var(--accent); color: var(--panel); font-weight: 600; font-size: 13px; border-radius: 9px; padding: 7px 16px; }
+
+@media (max-width: 820px) {
+  body { overflow: auto; height: auto; }
+  .app { grid-template-columns: 1fr; height: auto; }
+  aside { border-right: none; border-bottom: 1px solid var(--line); }
+  .side-scroll { padding: 16px; gap: 16px; overflow: visible; }
+  .how, .side-foot p { display: none; }
+  main { height: auto; min-height: 80vh; }
+  #messages { padding: 24px 16px 8px; }
+  .welcome h2 { font-size: 26px; }
+  .example { grid-template-columns: 1fr; gap: 2px; }
+  .example i { display: none; }
+  .composer { padding: 8px 12px 12px; position: sticky; bottom: 0; background: var(--bg); }
+  .row { grid-template-columns: 1fr; gap: 0; }
+  .step-body { padding-left: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="side-scroll">
+      <div>
+        <div class="brand"><div class="brand-mark">S</div><h1>SafeSwap</h1></div>
+        <p class="tagline">Allergy-aware recipes and groceries, checked against real food data.</p>
+      </div>
+
+      <section>
+        <div class="block-head"><span class="label">Your profile</span><button class="link-btn" id="setup-toggle">Quick setup</button></div>
+        <div class="profile-card">
+          <div id="profile"><p class="profile-empty">No profile yet. Tell me your allergies in the chat, or use quick setup.</p></div>
+          <div class="setup" id="setup">
+            <p>Tap to cycle: off → severe → moderate.</p>
+            <div class="chips" id="setup-allergens"></div>
+            <div class="chips" id="setup-diets"></div>
+            <button class="primary" id="setup-send">Save profile</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="how">
+        <div class="block-head"><span class="label">How it works</span></div>
+        <ol class="steps">
+          <li><span><b>Set your profile</b>Allergies and how severe they are.</span></li>
+          <li><span><b>Ask about a product</b>By name or barcode. SafeSwap reads its real ingredient label.</span></li>
+          <li><span><b>Paste a recipe</b>Every ingredient is checked, compound ones (like pesto) are broken down, and substitutes are verified before you see them. Usually 30–60 seconds.</span></li>
+        </ol>
+      </section>
+    </div>
+    <div class="side-foot">
+      <p>Data: <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>, a crowd-sourced database. It can be wrong or out of date. Always check the package, especially for severe allergies.</p>
+      <button class="ghost" id="new-session">Start over</button>
+    </div>
+  </aside>
+
+  <main>
+    <div id="messages"><div class="thread" id="thread">
+      <div class="welcome" id="welcome">
+        <h2>Cook and shop around your allergies.</h2>
+        <p>Tell me what you're allergic to, then ask about packaged foods or paste a recipe you love. I check every ingredient against a real food database and show my work under each answer.</p>
+        <div class="examples" id="examples"></div>
+      </div>
+    </div></div>
+
+    <div class="composer">
+      <div class="composer-inner">
+        <textarea id="input" rows="1" placeholder="Ask about a product, or paste a recipe…" autocomplete="off"></textarea>
+        <div class="composer-bar">
+          <span class="hint">Enter to send · Shift+Enter for a new line</span>
+          <button id="send">Send</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const thread = $("thread"), scroller = $("messages"), input = $("input"), sendBtn = $("send");
+let sessionId = null, busy = false;
+
+const ALLERGENS = [
+  ["tree_nuts", "Tree nuts"], ["peanuts", "Peanuts"], ["milk", "Milk / dairy"], ["eggs", "Eggs"],
+  ["gluten", "Gluten (celiac)"], ["soy", "Soy"], ["sesame", "Sesame"], ["fish", "Fish"],
+  ["crustaceans", "Shellfish"], ["molluscs", "Molluscs"], ["mustard", "Mustard"], ["celery", "Celery"],
+  ["corn", "Corn"], ["coconut", "Coconut"], ["sunflower", "Sunflower"], ["red_meat", "Red meat"],
+];
+const EXAMPLES = [
+  ["Profile", "I have a severe tree nut allergy, I'm lactose intolerant, and I have celiac disease."],
+  ["Product", "Is Kellogg's Corn Flakes OK for me?"],
+  ["Recipe", "Make me a version of this I can eat: Pesto pasta: 12 oz spaghetti, 1 cup basil pesto, 2 tbsp butter, 1/2 cup parmesan, 1 cup cherry tomatoes, salt and pepper."],
+  ["Substitute", "What can I use instead of butter in chocolate chip cookies?"],
+  ["Shopping", "Find me a store-bought granola that works for me."],
+  ["Compare", "Which is better for me, Cheerios or Corn Flakes?"],
+];
+
+// ---------- Helpers ----------
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined && text !== null) e.textContent = text;
+  return e;
+}
+function pill(text, color) { return el("span", "pill " + color, text); }
+const STATUS = {
+  flagged: ["flagged", "red"], conflict: ["conflict", "red"], rejected: ["rejected", "red"],
+  caution: ["caution", "amber"], verify_further: ["verify", "amber"],
+  no_known_conflict: ["no known conflict", "green"], usable: ["usable", "green"],
+  unclassified: ["no data", "gray"], not_found: ["not found", "gray"], unchecked: ["not checked", "gray"],
+  insufficient_data: ["insufficient data", "gray"],
+};
+function statusPill(s) { const [t, c] = STATUS[s] || [s, "gray"]; return pill(t, c); }
+function scrollDown() { scroller.scrollTop = scroller.scrollHeight; }
+
+// ---------- Quick setup: chips cycle off -> severe -> moderate ----------
+const CYCLE = { off: "severe", severe: "moderate", moderate: "off" };
+function setPick(b, state) {
+  b.dataset.state = state;
+  b.querySelector("small").textContent = state === "off" || state === "on" ? "" : state;
+}
+for (const [key, label] of ALLERGENS) {
+  const b = el("button", "pick", label);
+  b.dataset.key = key; b.dataset.label = label;
+  b.appendChild(el("small"));
+  setPick(b, "off");
+  b.onclick = () => setPick(b, CYCLE[b.dataset.state]);
+  $("setup-allergens").appendChild(b);
+}
+for (const d of ["vegan", "vegetarian"]) {
+  const b = el("button", "pick", d[0].toUpperCase() + d.slice(1));
+  b.dataset.diet = d; b.appendChild(el("small"));
+  setPick(b, "off");
+  b.onclick = () => setPick(b, b.dataset.state === "on" ? "off" : "on");
+  $("setup-diets").appendChild(b);
+}
+const toggleSetup = (show) => {
+  const s = $("setup"); s.classList.toggle("show", show ?? !s.classList.contains("show"));
+  $("setup-toggle").textContent = s.classList.contains("show") ? "Close" : "Quick setup";
+};
+$("setup-toggle").onclick = () => toggleSetup();
+$("setup-send").onclick = () => {
+  const picks = [...document.querySelectorAll("#setup-allergens .pick")].filter((b) => b.dataset.state !== "off")
+    .map((b) => `${b.dataset.label.toLowerCase()} (${b.dataset.state})`);
+  const diets = [...document.querySelectorAll("#setup-diets .pick")].filter((b) => b.dataset.state === "on").map((b) => b.dataset.diet);
+  if (!picks.length && !diets.length) return;
+  let text = picks.length ? `My allergies: ${picks.join(", ")}.` : "";
+  if (diets.length) text += ` I eat ${diets.join(" and ")}.`;
+  toggleSetup(false);
+  send(text.trim());
+};
+for (const [tag, text] of EXAMPLES) {
+  const b = el("button", "example");
+  b.append(el("span", "", tag), el("div", "", text), el("i", "", "→"));
+  b.onclick = () => send(text);
+  $("examples").appendChild(b);
+}
+
+// ---------- Profile ----------
+async function refreshProfile() {
+  if (!sessionId) return;
+  try {
+    const p = await (await fetch("/profile?session_id=" + encodeURIComponent(sessionId))).json();
+    renderProfile(p);
+  } catch (e) { /* the sidebar is a convenience; the chat still works */ }
+}
+function renderProfile(p) {
+  const box = $("profile");
+  if (!p.allergies.length && !p.diets.length && !p.avoid_ingredients.length) {
+    box.innerHTML = '<p class="profile-empty">No profile yet. Tell me your allergies in the chat, or use quick setup.</p>';
+    return;
+  }
+  box.innerHTML = "";
+  const wrap = el("div"); wrap.style.cssText = "display:grid;gap:12px";
+  const group = (label, items) => {
+    if (!items.length) return;
+    const g = el("div", "pgroup");
+    g.appendChild(el("div", "k", label));
+    const chips = el("div", "chips");
+    items.forEach((c) => chips.appendChild(c));
+    g.appendChild(chips);
+    wrap.appendChild(g);
+  };
+  group("Allergies", p.allergies.map((a) => {
+    const c = el("span", "chip " + a.severity, a.label);
+    c.appendChild(el("small", "", a.severity));
+    return c;
+  }));
+  group("Diets", p.diets.map((d) => el("span", "chip diet", d)));
+  group("Avoids", p.avoid_ingredients.map((d) => el("span", "chip avoid", d)));
+  box.appendChild(wrap);
+}
+
+function ingredientRow(r) {
+  const row = el("div", "row");
+  const name = el("div", "name");
+  name.append(statusPill(r.status), r.ingredient);
+  row.appendChild(name);
+  const d = el("div", "detail");
+  const parts = [];
+  if (r.matched_as) parts.push(["matched as ", r.matched_as]);
+  for (const f of r.flags || []) parts.push(["", `${f.detail}`, ` (${f.via})`]);
+  if (!r.flags && r.classified_as) parts.push(["", r.classified_as]);
+  if (r.compound) parts.push(["", "compound: may hide other allergens"]);
+  if (r.diet_uncertain) parts.push(["", `${r.diet_uncertain.join(", ")} status uncertain`]);
+  parts.forEach(([pre, strong, post], i) => {
+    if (i) d.append(" · ");
+    d.append(pre); d.appendChild(el("b", "", strong)); if (post) d.append(post);
+  });
+  if (!parts.length) d.textContent = r.status === "unchecked" ? "API unavailable" : "database has no classification";
+  row.appendChild(d);
+  return row;
+}
+function notesList(items) {
+  const ul = el("ul", "notes");
+  items.forEach((n) => ul.appendChild(el("li", "", n)));
+  return ul;
+}
+
+// ---------- One tool call -> a readable row ----------
+function renderStep(call) {
+  let res;
+  try { res = JSON.parse(call.result); } catch { res = { raw: call.result }; }
+  const a = call.args || {};
+  const step = el("div", "step");
+  const head = el("div", "step-head");
+  const body = el("div", "step-body");
+  let title = call.name, tone = "gray";
+  const badges = [];
+
+  if (res.error) {
+    tone = "red";
+    title = { lookup_product: "Product lookup failed", check_ingredients: "Ingredient check failed",
+      find_alternatives: "Substitute check failed", search_products: "Product search failed" }[call.name] || "Tool error";
+    badges.push(pill("error", "red"));
+    body.appendChild(el("div", "", res.error));
+    if (res.hint) body.appendChild(el("div", "detail", "Hint: " + res.hint));
+  } else if (call.name === "set_dietary_profile") {
+    tone = "green"; title = "Updated your profile";
+    body.appendChild(notesList(res.changes || []));
+    if (res.problems) { tone = "amber"; body.appendChild(el("div", "sub", "Needs attention")); body.appendChild(notesList(res.problems)); badges.push(pill(res.problems.length + " note" + (res.problems.length > 1 ? "s" : ""), "amber")); }
+  } else if (call.name === "get_dietary_profile") {
+    title = "Read your profile";
+    body.appendChild(el("div", "", JSON.stringify(res.profile)));
+  } else if (call.name === "check_ingredients") {
+    const n = (res.results || []).length;
+    title = res.part_of ? `Broke down “${res.part_of}”` : `Checked ${n} ingredient${n === 1 ? "" : "s"}`;
+    const counts = {};
+    (res.results || []).forEach((r) => (counts[r.status] = (counts[r.status] || 0) + 1));
+    for (const s of ["flagged", "no_known_conflict", "unclassified", "not_found", "unchecked"])
+      if (counts[s]) { const [t, c] = STATUS[s]; badges.push(pill(`${counts[s]} ${t}`, c)); }
+    tone = counts.flagged ? "red" : counts.no_known_conflict ? "green" : "gray";
+    badges.push(pill(res.part_of ? "model breakdown · database check" : "database", "src"));
+    const rows = el("div", "rows");
+    (res.results || []).forEach((r) => rows.appendChild(ingredientRow(r)));
+    body.appendChild(rows);
+  } else if (call.name === "find_alternatives") {
+    title = `Substitutes for “${res.replacing || a.ingredient}”`;
+    tone = res.usable?.length ? "green" : "amber";
+    if (res.usable?.length) badges.push(pill(res.usable.length + " usable", "green"));
+    if (res.rejected?.length) badges.push(pill(res.rejected.length + " rejected", "red"));
+    if (res.purpose) body.appendChild(el("div", "detail", "Role in dish: " + res.purpose));
+    for (const [key, label] of [["usable", "Usable"], ["verify_further", "Needs breakdown / no data"], ["rejected", "Rejected"]]) {
+      if (!res[key]?.length) continue;
+      body.appendChild(el("div", "sub", label));
+      const rows = el("div", "rows");
+      res[key].forEach((r) => rows.appendChild(ingredientRow(r)));
+      body.appendChild(rows);
+    }
+    if (res.notes?.length) { body.appendChild(el("div", "sub", "Notes")); body.appendChild(notesList(res.notes)); }
+  } else if (call.name === "search_products") {
+    title = `Searched “${res.query || a.query}”`;
+    const n = (res.results || []).length;
+    tone = n ? "green" : "gray";
+    badges.push(pill(`${n} match${n === 1 ? "" : "es"}`, n ? "green" : "gray"), pill("database · ranked in code", "src"));
+    if (res.searched_as) body.appendChild(el("div", "detail", `No close matches, so searched for “${res.searched_as}”.`));
+    const rows = el("div", "rows");
+    for (const p of res.results || []) {
+      const row = el("div", "row");
+      const name = el("div", "name");
+      name.append(`#${p.rank}`, statusPill(p.verdict), p.name);
+      const d = el("div", "detail");
+      d.appendChild(el("b", "", p.brand || "unknown brand"));
+      for (const l of p.labels || []) { d.append(" "); d.appendChild(pill((l.certified ? "✓ " : "") + l.label, l.certified ? "green" : "gray")); }
+      d.appendChild(el("div", "", (p.why_ranked || []).join(" · ")));
+      row.append(name, d); rows.appendChild(row);
+    }
+    body.appendChild(rows);
+    if (res.notes?.length) { body.appendChild(el("div", "sub", "Notes")); body.appendChild(notesList(res.notes)); }
+  } else if (call.name === "lookup_product") {
+    const p = res.product || {};
+    title = `Looked up ${p.name || a.name || a.barcode}${p.brand ? " (" + p.brand + ")" : ""}`;
+    tone = (STATUS[res.verdict] || [0, "gray"])[1];
+    badges.push(statusPill(res.verdict), pill("database", "src"));
+    if (res.conflicts?.length) { body.appendChild(el("div", "sub", "Conflicts")); body.appendChild(notesList(res.conflicts)); }
+    if (res.cautions?.length) { body.appendChild(el("div", "sub", "Cautions")); body.appendChild(notesList(res.cautions)); }
+    const facts = el("div", "rows");
+    const fact = (k, v) => { if (!v) return; const r = el("div", "row"); r.append(el("div", "name", k), el("div", "detail", v)); facts.appendChild(r); };
+    fact("Label allergens", (res.label_allergens || []).join(", ") || "none listed");
+    fact("May contain", (res.may_contain || []).join(", ") || "nothing on file");
+    fact("Free-from labels", (res.labels || []).map((l) => (l.certified ? "certified " : "claims ") + l.label).join(", ") || "none relevant on file");
+    fact("Barcode", p.barcode);
+    body.appendChild(el("div", "sub", "Label data")); body.appendChild(facts);
+    if (res.ingredients_text) { body.appendChild(el("div", "sub", "Ingredients")); body.appendChild(el("div", "ingredients-text", res.ingredients_text)); }
+    if (res.data_quality?.length) { body.appendChild(el("div", "sub", "Data quality")); body.appendChild(notesList(res.data_quality)); }
+    if (p.url) { const l = el("a", "", "View on Open Food Facts ↗"); l.href = p.url; l.target = "_blank"; l.rel = "noopener"; const w = el("div"); w.style.marginTop = "10px"; w.appendChild(l); body.appendChild(w); }
+  }
+
+  const main = el("div", "main");
+  main.appendChild(el("span", "title", title));
+  badges.forEach((b) => main.appendChild(b));
+  head.append(el("span", "dot " + tone), main, el("span", "tool-name", call.name));
+  head.onclick = () => step.classList.toggle("open");
+
+  const toggle = el("button", "raw-toggle", "Show raw call");
+  const raw = el("pre", "raw", `${call.name}(${JSON.stringify(a, null, 2)})\n\n→ ${JSON.stringify(res, null, 2)}`);
+  toggle.onclick = () => { raw.classList.toggle("show"); toggle.textContent = raw.classList.contains("show") ? "Hide raw call" : "Show raw call"; };
+  body.append(toggle, raw);
+  step.append(head, body);
+  return step;
+}
+
+// A trace that grows live: one row per tool as it finishes.
+function createTrace() {
+  const d = el("details", "trace");
+  d.open = true;  // open while the turn runs, so steps appear as they happen
+  const summary = el("summary");
+  const chev = el("span", "chev", "▶"), what = el("span", "what", "Tool calls"), src = el("span", "src");
+  summary.append(chev, what, src);
+  const steps = el("div", "trace-steps");
+  d.append(summary, steps);
+  const calls = [];
+  const update = () => {
+    const kinds = new Set(calls.map((c) => c.name));
+    const sources = [];
+    if (kinds.has("lookup_product") || kinds.has("search_products")) sources.push("product data");
+    if (kinds.has("check_ingredients") || kinds.has("find_alternatives")) sources.push("ingredient database");
+    src.textContent = `${calls.length} step${calls.length === 1 ? "" : "s"}` + (sources.length ? " · " + sources.join(", ") : "");
+  };
+  return {
+    el: d,
+    add(call) { calls.push(call); steps.appendChild(renderStep(call)); update(); },
+    get count() { return calls.length; },
+  };
+}
+
+// What the indicator says while a tool runs: the real step, from the tool's arguments.
+function describeStart(name, a = {}) {
+  const n = (a.ingredients || []).length;
+  switch (name) {
+    case "set_dietary_profile": return "Updating your profile…";
+    case "get_dietary_profile": return "Reading your profile…";
+    case "check_ingredients":
+      return a.part_of ? `Breaking down “${a.part_of}”…` : `Checking ${n} ingredient${n === 1 ? "" : "s"}…`;
+    case "find_alternatives": return `Checking substitutes for “${a.ingredient || "an ingredient"}”…`;
+    case "search_products": return `Searching products: “${a.query || ""}”…`;
+    case "lookup_product": return a.name ? `Looking up ${a.name}…` : `Looking up barcode ${a.barcode || ""}…`;
+    default: return "Working…";
+  }
+}
+
+// Read server-sent events from a POST response (EventSource only supports GET).
+async function* readEvents(res) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let cut;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const chunk = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      const data = chunk.split("\n").filter((l) => l.startsWith("data: ")).map((l) => l.slice(6)).join("\n");
+      if (data) yield JSON.parse(data);  // lines starting with ":" are keepalives
+    }
+  }
+}
+
+// ---------- Chat ----------
+async function send(textArg) {
+  const text = (textArg ?? input.value).trim();
+  if (!text || busy) return;
+  busy = true; sendBtn.disabled = true;
+  input.value = ""; autosize();
+  $("welcome")?.remove();
+
+  thread.appendChild(el("div", "msg user", text));
+  const wrap = el("div", "msg assistant");
+  const thinking = el("div", "thinking");
+  thinking.innerHTML = '<span class="dots"><span></span><span></span><span></span></span>';
+  const phase = el("span", "", "Thinking…");
+  thinking.appendChild(phase);
+  // Recipe adaptations run several rounds of checks; say so up front.
+  const looksLikeRecipe = /recipe|adapt|version (of this|i can eat)|make (this|it) (work|[\w-]+ free|[\w]+-free)/i.test(text)
+    || ((text.match(/,/g) || []).length >= 3 && !/allerg|avoid|intoleran/i.test(text))
+    || text.length > 160;
+  if (looksLikeRecipe) thinking.appendChild(el("span", "wait-note", "Recipe adaptations usually take 30–60 seconds: every ingredient and substitute is checked."));
+  wrap.appendChild(thinking);
+  thread.appendChild(wrap);
+  scrollDown();
+
+  let trace = null;
+  // The answer goes first; the trace sits under it as supporting evidence.
+  const showAnswer = (markdown) => {
+    const answer = el("div", "answer");
+    answer.innerHTML = DOMPurify.sanitize(marked.parse(markdown || "(no response)"));
+    answer.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
+    wrap.prepend(answer);
+  };
+  const showError = (message) => wrap.prepend(el("div", "answer error", message));
+
+  try {
+    const res = await fetch("/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, session_id: sessionId }),
+    });
+    if (!res.ok) throw new Error(`The server returned an error (${res.status}). Please try again.`);
+    if (!(res.headers.get("content-type") || "").includes("text/event-stream")) {
+      throw new Error("Unexpected response from the server. Your sign-in may have expired; refresh the page.");
+    }
+    let finished = false;
+    for await (const ev of readEvents(res)) {
+      if (ev.type === "thinking") {
+        phase.textContent = "Thinking…";
+      } else if (ev.type === "tool_start") {
+        phase.textContent = describeStart(ev.name, ev.args);
+      } else if (ev.type === "tool_end") {
+        if (!trace) { trace = createTrace(); wrap.insertBefore(trace.el, thinking); }
+        trace.add({ name: ev.name, args: ev.args, result: ev.result });
+      } else if (ev.type === "done") {
+        sessionId = ev.session_id;
+        thinking.remove();
+        showAnswer(ev.response);
+        finished = true;
+      } else if (ev.type === "error") {
+        thinking.remove();
+        showError(ev.message);
+        finished = true;
+      }
+      scrollDown();
+    }
+    if (!finished) throw new Error("The connection dropped before the answer finished. Please send that again.");
+  } catch (e) {
+    thinking.remove();
+    showError(e.message.startsWith("The ") || e.message.startsWith("Unexpected") ? e.message
+      : "Couldn't reach the server: " + e.message);
+  } finally {
+    if (trace) trace.el.open = false;
+    refreshProfile();
+    busy = false; sendBtn.disabled = false;
+    scrollDown(); input.focus();
+  }
+}
+
+function autosize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 200) + "px"; }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+sendBtn.onclick = () => send();
+$("new-session").onclick = async () => {
+  if (busy) return;
+  if (sessionId) await fetch("/clear?session_id=" + encodeURIComponent(sessionId), { method: "POST" });
+  location.reload();
+};
+
+// ---------- Demo mode (open with #demo): canned events, no backend needed ----------
+if (location.hash === "#demo") {
+  const J = JSON.stringify;
+  const events = [
+    { type: "tool_end", name: "set_dietary_profile", args: {}, result: J({ changes: ["Added tree nuts (severe)", "Added milk / dairy (moderate)", "Added gluten (severe)"] }) },
+    { type: "tool_end", name: "lookup_product", args: { name: "Corn Flakes" }, result: J({ verdict: "no_known_conflict", product: { name: "Corn Flakes", brand: "Kellogg's", barcode: "0038000001109" }, label_allergens: [], may_contain: [], labels: [], ingredients_text: "Milled corn, sugar, malt flavor, contains 2% or less of salt, iron, vitamins.", data_quality: ["No 'may contain' info on file. That means unknown, not none; check the package."] }) },
+    { type: "done", session_id: "demo", response: "**Not a good fit for you:** Kellogg's Corn Flakes lists malt flavor, which is usually made from barley (my reading of the ingredient list).\n\n- The database shows no label allergens and no conflicts with your profile (database).\n- Malt flavor is a gluten source for celiac disease (my knowledge).\n\n> **Severe allergy reminder (tree nuts and gluten):** the database can't see cross-contact. Check the package's \"may contain\" line before eating." },
+  ];
+  window.fetch = async (url) => {
+    if (String(url).startsWith("/profile")) return new Response(J({ allergies: [{ label: "tree nuts", severity: "severe" }, { label: "gluten", severity: "severe" }, { label: "milk / dairy", severity: "moderate" }], diets: [], avoid_ingredients: [] }));
+    const enc = new TextEncoder();
+    const body = new ReadableStream({ async start(c) {
+      for (const e of events) { await new Promise((r) => setTimeout(r, 500)); c.enqueue(enc.encode(`data: ${J(e)}\n\n`)); }
+      c.close();
+    } });
+    return new Response(body, { headers: { "content-type": "text/event-stream" } });
+  };
+  send(EXAMPLES[0][1] + " " + EXAMPLES[1][1]);
+}
+input.focus();
+</script>
+</body>
+</html>
