@@ -10,7 +10,7 @@ or wanted to cook a recipe that's full of things they can't eat.
 
 ## What it does that a plain chatbot doesn't
 
-- **Reads real labels.** Ask about a product by name or barcode and SafeSwap pulls its actual ingredient
+- **Reads real labels.** Ask about a product by name or database barcode and SafeSwap pulls its actual ingredient
   list, label allergens, and "may contain" warnings. It also reads the raw ingredient text for sources the
   database tags miss (Kellogg's Corn Flakes: the database shows no gluten, but "malt flavor" is barley).
 - **Checks every ingredient in code, every time.** Your allergy profile is applied to each ingredient
